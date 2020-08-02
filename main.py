@@ -34,8 +34,8 @@ model_names = sorted(name for name in models.__dict__
 
 # Parse arguments
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-parser.add_argument('-d', '--data', default='path to dataset', type=str)
-parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
+parser.add_argument('-d', '--data', default='/home/czd-2019/Projects/celebA_dataset', type=str)
+parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet50',
                     choices=model_names,
                     help='model architecture: ' +
                         ' | '.join(model_names) +
@@ -43,13 +43,13 @@ parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 # Optimization options
-parser.add_argument('--epochs', default=90, type=int, metavar='N',
+parser.add_argument('--epochs', default=50, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('--train-batch', default=256, type=int, metavar='N',
+parser.add_argument('--train-batch', default=32, type=int, metavar='N',
                     help='train batchsize (default: 256)')
-parser.add_argument('--test-batch', default=200, type=int, metavar='N',
+parser.add_argument('--test-batch', default=32, type=int, metavar='N',
                     help='test batchsize (default: 200)')
 parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
                     metavar='LR', help='initial learning rate')
@@ -84,7 +84,7 @@ parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
 parser.add_argument('--world-size', default=1, type=int,
                     help='number of distributed processes')
-parser.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str,
+parser.add_argument('--dist-url', default='', type=str,
                     help='url used to set up distributed training')
 parser.add_argument('--dist-backend', default='gloo', type=str,
                     help='distributed backend')

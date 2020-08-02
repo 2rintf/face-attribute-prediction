@@ -41,7 +41,7 @@ class CelebA(data.Dataset):
                 raise(RuntimeError("# Annotated face attributes of CelebA dataset should not be different from 40"))
             images.append(sample[0])
             targets.append([int(i) for i in sample[1:]])
-        self.images = [os.path.join(root, 'img_align_celeba_png', img) for img in images]
+        self.images = [os.path.join(root, 'img_align_celeba', img) for img in images]
         self.targets = targets
         self.transform = transform
         self.target_transform = target_transform
