@@ -14,9 +14,9 @@ hair_attr = [5,6,29,33,34]
 sex_attr = [21]
 beard_attr=[17,23,25]
 skin_attr = [27]
-eye_attr = [2,4,13,16,23,24]
+eye_attr = [2,4,13,16,24]
 
-# [9, 10, 12, 18, 5, 6, 29, 33, 34, 21, 17, 23, 25, 27, 2, 4, 13, 16, 23, 24]
+# [9, 10, 12, 18, 5, 6, 29, 33, 34, 21, 17, 23, 25, 27, 2, 4, 13, 16, 24]
 total_label=haircolor_attr+hair_attr+sex_attr+beard_attr+skin_attr+eye_attr
 
 
