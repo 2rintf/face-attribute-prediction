@@ -105,3 +105,15 @@ venv.bak/
 
 # checkpoints
 checkpoints/
+
+
+self_network/__pycache__/
+self_network/checkpoint/
+self_network/checkpoint_old/
+self_network/model_pic_test/
+self_network/data_list
+self_network/filter_train_data.txt
+self_network/filter_val_data.txt
+
+
+resnet50-19c8e357.pth

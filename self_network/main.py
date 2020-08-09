@@ -1,6 +1,6 @@
 import argparse
 import torch
-# import torch.utils.data
+import torch.utils.data
 import torch.nn as nn
 import numpy as np
 import os
@@ -19,20 +19,21 @@ import shutil
 from torch.optim import lr_scheduler
 import math
 import cv2 as cv
+import matplotlib.pyplot as plt
 
 
-BATCH_SIZE = 64
-EPOCH = 50
+BATCH_SIZE = 256
+EPOCH = 80
 ROOT_PATH = "/home/czd-2019/Projects/celebA_dataset"
+pic_path="./pic/"
 
 
 def get_error_num(model_pred,labels,threshold=0.6):
     pred_result = model_pred > threshold
     pred_result = pred_result.float()
     r,l = pred_result.size()
-    # print(pred_result)
-    print(pred_result.shape)
-    print(labels.shape)
+    # print(pred_result.shape)
+    # print(labels.shape)
     # 得到预测值与标签值不一致的类的个数
     temp = pred_result-labels
     error = temp[temp!=0]
@@ -155,19 +156,29 @@ def main():
         train_dataset, batch_size=BATCH_SIZE, shuffle=True,
         num_workers=4, pin_memory=True)
 
-    val_loader = torch.utils.data.DataLoader(
-        CelebA(ROOT_PATH, '20_val_data.txt', transforms.Compose([
+    val_dataset = CelebA(
+        ROOT_PATH,
+        '20_val_data.txt',
+        transforms.Compose([
             transforms.ToTensor(),
             normalize,
-        ])),
+        ]))
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset,
         batch_size=BATCH_SIZE, shuffle=False,
         num_workers=4, pin_memory=True)
 
-    test_loader = torch.utils.data.DataLoader(
-        CelebA(ROOT_PATH, '20_test_data.txt', transforms.Compose([
+    test_dataset = CelebA(
+        ROOT_PATH,
+        '20_test_data.txt',
+        transforms.Compose([
             transforms.ToTensor(),
             normalize,
-        ])),
+        ]))
+
+
+    test_loader = torch.utils.data.DataLoader(
+        test_dataset,
         batch_size=BATCH_SIZE, shuffle=False,
         num_workers=4, pin_memory=True)
 
@@ -181,23 +192,32 @@ def main():
     loss_func = nn.BCEWithLogitsLoss().to(device)
     print(model)
 
+    # MultiStepLR
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,[40],gamma=0.3)
+
+    loss_list=[]
+    acc_list=[]
+    draw_loss_sum=0.0
+    step_list=[]
+
+    step=0
     model.train()
-    train_loss = 0.0
     for epoch in range(EPOCH):
+        total_error = 0
+        running_loss = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        draw_loss_sum = 0.0
         for i, (input, target) in enumerate(train_loader):
-
+            step+=1
             optimizer.zero_grad()
-
-            print(input.shape)
             labels = get_each_attr_label(target)
 
             hair_color,hair_cut,sex,beard,skin,eyes = model(input.to(device))
             # print(hair_color.cpu().detach().numpy().shape)
             # print(labels[0].numpy().shape)
-            print(sex.shape)
-            print(labels[2].shape)
-            print(sex)
-            print(labels[2].unsqueeze(1).type(torch.FloatTensor))# 从[64]拉成[64, 1]，以匹配输入的维数
+            # print(sex.shape)
+            # print(labels[2].shape)
+            # print(sex)
+            # print(labels[2].unsqueeze(1).type(torch.FloatTensor))# 从[64]拉成[64, 1]，以匹配输入的维数
 
             # 提取各分类器各自的label, 并且转为FloatTensor.
             label1_f = labels[0].type(torch.FloatTensor).to(device)
@@ -215,30 +235,156 @@ def main():
             loss_skin = loss_func(skin,label5_f)
             loss_eyes = loss_func(eyes,label6_f)
 
-            # todo print loss
+            running_loss[1]+=loss_haircolor
+            running_loss[2]+=loss_haircut
+            running_loss[3] += loss_sex
+            running_loss[4] += loss_beard
+            running_loss[5] += loss_skin
+            running_loss[6] += loss_eyes
 
-            # todo 考虑6个loss间的权重？
+
+            # todo 由于数据正负样本的不平衡，是否考虑6个loss间的权重？
             total_loss = loss_haircolor+loss_haircut+loss_sex+loss_beard+loss_skin+loss_eyes
+            running_loss[0]+=total_loss
+            draw_loss_sum+=total_loss
             total_loss.backward()
 
+            # print loss
+            print_loss_step = 10
+            if i%print_loss_step == 0 and i!= 0:
+                print('[%d, %5d] total_loss: %.3f \n     | loss1:%.3f  loss2:%.3f  loss3:%.3f loss4:%.3f  loss5:%.3f  loss6:%.3f'
+                      % (epoch + 1, i + 1, running_loss[0] / print_loss_step,
+                         running_loss[1]/print_loss_step,
+                         running_loss[2]/print_loss_step,
+                         running_loss[3]/print_loss_step,
+                         running_loss[4]/print_loss_step,
+                         running_loss[5]/print_loss_step,
+                         running_loss[6]/print_loss_step))
+                running_loss = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+            # draw total loss
+            draw_loss_step = 500
+            if i % draw_loss_step == 0 and i!=0:
+                draw_loss = draw_loss_sum.cpu().detach().numpy() / draw_loss_step
+                loss_list.append(draw_loss)
+                step_list.append(step)
+                draw_loss_sum = 0.0
+
             # 累计错误个数
-            error1 = get_accuracy(torch.sigmoid(hair_color), label1_f)
-            error2 = get_accuracy(torch.sigmoid(hair_cut), label1_f)
-            error3 = get_accuracy(torch.sigmoid(sex), label1_f)
-            error4 = get_accuracy(torch.sigmoid(beard), label1_f)
-            error5 = get_accuracy(torch.sigmoid(skin), label1_f)
-            error6 = get_accuracy(torch.sigmoid(hair), label1_f)
-
-
-            exit(0)
+            error1 = get_error_num(torch.sigmoid(hair_color), label1_f)
+            error2 = get_error_num(torch.sigmoid(hair_cut), label2_f)
+            error3 = get_error_num(torch.sigmoid(sex), label3_f)
+            error4 = get_error_num(torch.sigmoid(beard), label4_f)
+            error5 = get_error_num(torch.sigmoid(skin), label5_f)
+            error6 = get_error_num(torch.sigmoid(eyes), label6_f)
+            total_error+= error1+error2+error3+error4+error5+error6
 
             optimizer.step()
 
-        # todo every epoch print accuracy
+        # every epoch print accuracy
+        print(len(train_dataset))
+        all_num = len(train_dataset)*20
+        epoch_acc = 1-total_error*1.0/all_num
+        acc_list.append(epoch_acc)
+        print('epoch: %d | Train accuracy: %.3f %%' % (epoch+1, epoch_acc))
+        scheduler.step()
+        print(scheduler.get_lr())
 
-        # todo save checkpoint
+        # save checkpoint
+        save_name = "checkpoint_epoch"+str(epoch+1)+".pth"
+        print("checkpoint. Save name:"+save_name+"accuracy:%.3f" % (epoch_acc))
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': total_loss,
+        }, "./checkpoint/"+save_name)
 
 
+    x1 = range(EPOCH)
+    y1 = acc_list
+    plt.title("Accuracy")
+    plt.plot(x1, y1, 'o-b', label='train_acc')
+    plt.legend()
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.savefig(pic_path + "acc2.png")
+    plt.cla()
+
+    x2 = step_list
+    y2 = loss_list
+    plt.title("Total Loss")
+    plt.plot(x2, y2, 'o-r', label='train_loss')
+    plt.legend()
+    plt.xlabel('Step')
+    plt.ylabel('Loss')
+    plt.savefig(pic_path + "loss2.png")
+    plt.cla()
+##############################################################
+    print("Train finish.Start eval.")
+
+    model.eval()
+    total_error = 0
+    running_loss = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    with torch.no_grad():
+        for i, (input, target) in enumerate(val_loader):
+            labels = get_each_attr_label(target)
+
+            hair_color,hair_cut,sex,beard,skin,eyes = model(input.to(device))
+
+            # 提取各分类器各自的label, 并且转为FloatTensor.
+            label1_f = labels[0].type(torch.FloatTensor).to(device)
+            label2_f = labels[1].type(torch.FloatTensor).to(device)
+            label3_f = labels[2].unsqueeze(1).type(torch.FloatTensor).to(device)
+            label4_f = labels[3].type(torch.FloatTensor).to(device)
+            label5_f = labels[4].unsqueeze(1).type(torch.FloatTensor).to(device)
+            label6_f =labels[5].type(torch.FloatTensor).to(device)
+
+            # 计算个分类器Loss
+            loss_haircolor = loss_func(hair_color,label1_f)
+            loss_haircut = loss_func(hair_cut,label2_f)
+            loss_sex = loss_func(sex,label3_f)
+            loss_beard = loss_func(beard,label4_f)
+            loss_skin = loss_func(skin,label5_f)
+            loss_eyes = loss_func(eyes,label6_f)
+
+            running_loss[1]+=loss_haircolor
+            running_loss[2]+=loss_haircut
+            running_loss[3] += loss_sex
+            running_loss[4] += loss_beard
+            running_loss[5] += loss_skin
+            running_loss[6] += loss_eyes
+
+
+            # todo 由于数据正负样本的不平衡，是否考虑6个loss间的权重？
+            total_loss = loss_haircolor+loss_haircut+loss_sex+loss_beard+loss_skin+loss_eyes
+            running_loss[0]+=total_loss
+
+            # print loss
+            print_loss_step = 10
+            if i%print_loss_step == 0 and i!= 0:
+                print('[%5d] total_loss: %.3f \n     | loss1:%.3f  loss2:%.3f  loss3:%.3f loss4:%.3f  loss5:%.3f  loss6:%.3f'
+                      % ( i + 1, running_loss[0] / print_loss_step,
+                         running_loss[1]/print_loss_step,
+                         running_loss[2]/print_loss_step,
+                         running_loss[3]/print_loss_step,
+                         running_loss[4]/print_loss_step,
+                         running_loss[5]/print_loss_step,
+                         running_loss[6]/print_loss_step))
+                running_loss = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+            # 累计错误个数
+            error1 = get_error_num(torch.sigmoid(hair_color), label1_f)
+            error2 = get_error_num(torch.sigmoid(hair_cut), label2_f)
+            error3 = get_error_num(torch.sigmoid(sex), label3_f)
+            error4 = get_error_num(torch.sigmoid(beard), label4_f)
+            error5 = get_error_num(torch.sigmoid(skin), label5_f)
+            error6 = get_error_num(torch.sigmoid(eyes), label6_f)
+            total_error+= error1+error2+error3+error4+error5+error6
+        # every epoch print accuracy
+        all_num = len(val_dataset)*20
+        epoch_acc = 1-total_error*1.0/all_num
+        print('Eval accuracy: %.3f %%' % (epoch_acc))
 
 
 

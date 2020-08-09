@@ -37,8 +37,10 @@ for line in open(os.path.join(root,attr_path),'r'):
         # if label_t[h] == 1:
         filter_img_list.append(img_t)
         # 把label拿出来
-        label_t = [label_t[i] for i in total_label]
+        label_t = [label_t[i-1] for i in total_label]
+
         label_t = [1 if j == 1 else 0 for j in label_t]
+
         filter_label_list.append(label_t)
         break
 
@@ -46,7 +48,7 @@ for line in open(os.path.join(root,attr_path),'r'):
 print(len(filter_img_list))
 print(len(filter_label_list))
 
-file = open("./data_list/20_test_data.txt",'w')
+file = open("./data_list/write_use.txt",'w')
 for img,label in zip(filter_img_list,filter_label_list):
     label = [str(i) for i in label]
     file.write(img+" ")
